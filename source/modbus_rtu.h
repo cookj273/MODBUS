@@ -15,6 +15,7 @@
 #define MODBUS_RTU_H_
 
 #include "conf_modbus.h"
+#include "modbus_module.h"
 
 /*!
 * @brief Initializes RTU functionality for receiving MODBUS packets
@@ -22,7 +23,7 @@
 * Sets up our state variables and initialize the timers and UART ports
 * for communicating MODBUS.
 *
-* @param port The port to use for function
+* @param mode Whether we are in ASCII for RTU mode
 * @param port The port number to used (arbitrary, passed on to the board modbus init function)
 * @param baudRate The baud rate to use for communication
 * @param parity The parity to use
@@ -30,7 +31,7 @@
 *
 * @return Status value indicating the result of the init
 */
-modbus_status modbus_rtu_init(uint8_t port, uint32_t baudRate, modbus_parity parity, uint8_t stopBits);
+modbus_status modbus_rtu_init(modbus_modes mode, uint8_t port, uint32_t baudRate, modbus_parity parity, uint8_t stopBits);
 
 /*!
 * @brief Enables/Disables the RTU communications

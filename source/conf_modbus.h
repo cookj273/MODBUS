@@ -13,13 +13,19 @@
 #ifndef CONF_MODBUS_H_
 #define CONF_MODBUS_H_
 //Includes
-#include <asf.h>
+#include "stdint.h"
+#include "stdbool.h"
+#include "stddef.h"
 
 //Defines
 #define NUM_MODBUS_PORTS                            1       //!< Number of MODBUS Ports available for use
-#define MODBUS_ASCII_ENABLED                        1       //!< If Modbus ASCII support is enabled
 #define MODBUS_RTU_ENABLED                          1       //!< If Modbus RTU support is enabled
+#define MODBUS_ASCII_ENABLED                        1       //!< If Modbus ASCII support is enabled
 #define MODBUS_TCP_ENABLED                          0       //!< If Modbus TCP support is enabled
+
+#if MODBUS_ASCII_ENABLED > 0 && MODBUS_RTU_ENABLED < 1
+#error MODBUS ASCII Mode requires RTU mode to also be enabled!
+#endif
 
 #define MODBUS_ADDRESS_BROADCAST    0                       //!< Modbus broadcast address.
 #define MODBUS_ADDRESS_MIN          1                       //!< Smallest possible slave address.

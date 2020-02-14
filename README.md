@@ -3,16 +3,15 @@ Embedded MODBUS Master & Slave Drivers
 Description:
 
 This driver is for the implementation of MODBUS aimed at any processor.  It is written in C and hardware specific functions are stubbed out and rely on the user providing
-a port file for the implementation of this.  The driver allows opening multiple ports as either slave or master.  It implements 485 RTU mode currently with some of the stuff for
-ASCII mode written but not completed.  TCP has also not yet been implemented.
+a port file for the implementation of this.  The driver allows opening multiple ports as either slave or master.  It implements 485 RTU & ASCII mode currently with some of the stuff for.  TCP has also not yet been implemented.
 
 These drivers were written to be as generic, portable, and expandable as possible.  Basically the files in the source folder you should be able to just drop into your project.
-You will then need to implement a MODBUS_PORT file to implement the hardware functions for transmitting and receiving, and a MODBUS_CALLBACKS file to handle the
-retrieving of requested registers.  You will also need to include the CONF_MODBUS file and set the configuration appropriately for your implementation.  You can disable and
+You will then need to implement a modbus_port file to define the stubbed out hardware functions for transmitting and receiving, and a modbus_callbacks file to handle the
+retrieving of requested registers.  You also will likely need to edit the conf_modbus.h file for your needs, you can disable and
 enable different features here to save on code space as well.
 
-As far as running the drivers, take a look at the example.  Basically you just include modbus_module.h in your main app and then call modbus_module_init and pass in your desired
-settings to start up an instance of the interface.  You can open up multiple ports by calling the init function multiple times with different port numbers.  The maximum number of allowable
+As far as running the drivers, take a look at the examples.  Basically you just include modbus_module.h in your main app and then call modbus_module_init and pass in your desired
+settings to start up an instance of the interface.  You can open up multiple ports by calling the init function multiple times with different port numbers (just be sure you have written you modbus_ports implementations to handle the port value being passed in).  The maximum number of allowable
 ports is defined in the conf file and can be changed to whatever is needed (more ports = more memory).  Once inited you need to routinely call modbus_module_service in your main loop
 to handle the processing of packets such.  There is also a modbus_module_needs_serviced function if you prefer to check if the module needs serviced or not.
 
@@ -33,11 +32,14 @@ Rev 1.1 - Jarrod Cook (1/2015):
 	
 Rev 1.2 - Jarrod Cook (4/2017):
 	- Fixed an issue with discrete looking at the wrong start address function.
+	
+Rev 1.3 - Jarrod Cook (2/2020):
+	- Finished ASCII Functionality.
 		
 ------------------------------------------------------------------------------------------------------
 Todos:
-	- Implement ASCII mode for RTU (started)
-	- Implement TCP mode (look at sloan)
+	- Add in a master example
+	- Implement TCP mode
 	- Implement the ability to set both they BYTE (endianness) and WORD (word swap) order [ABCD,BADC,CDAB,DCBA].
 	
 ------------------------------------------------------------------------------------------------------

@@ -17,7 +17,7 @@
 
 //Version
 #define MODBUS_LIBRARY_MAJOR_VERSION    1
-#define MODBUS_LIBRARY_MINOR_VERSION    2
+#define MODBUS_LIBRARY_MINOR_VERSION    3
 
 //Defines
 #define MODBUS_FUNC_ERROR       128                                         //!< FUNCTION ERROR MASK (OR WITH ORIGINAL FUNCTION CODE TO INDICATE ERROR)

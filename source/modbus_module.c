@@ -162,6 +162,9 @@ modbus_status modbus_module_init(uint8_t port, modbus_modes mode, modbus_device_
         //Setup the correct mode
         switch (mode) {
         case MODBUS_RTU:
+#if MODBUS_ASCII_ENABLED > 0
+        case MODBUS_ASCII:
+#endif
             modbusInfo[port].commsEnable = modbus_rtu_enable;
             modbusInfo[port].frameTransmit = modbus_rtu_transmit;
             modbusInfo[port].frameReceive = modbus_rtu_receive;
@@ -176,22 +179,8 @@ modbus_status modbus_module_init(uint8_t port, modbus_modes mode, modbus_device_
                 modbusInfo[port].getTxBuffer = modbus_rtu_get_tx_buffer;
             }
 
-            status = modbus_rtu_init(port, baudRate, parity, stopBits);
+            status = modbus_rtu_init(mode, port, baudRate, parity, stopBits);
             break;
-        //TODO: IMPLEMENT ASCII DRIVERS!!!!
-        /*case MB_ASCII:
-            modbusInfo.frameStart = eMBASCIIStart;
-            modbusInfo.frameStop = eMBASCIIStop;
-            modbusInfo.frameSend = eMBASCIISend;
-            modbusInfo.frameReceive = eMBASCIIReceive;
-            modbusInfo.frameClose = MB_PORT_HAS_CLOSE ? vMBPortClose : NULL;
-            modbusInfo.frameByteReceived = xMBASCIIReceiveFSM;
-            modbusInfo.frameTransmitterEmpty = xMBASCIITransmitFSM;
-            modbusInfo.timerExpired = xMBASCIITimerT1SExpired;
-            modbusInfo.isStateIdle = xMBASCIIStateIdle;
-
-            status = eMBASCIIInit(ucPort, ulBaudRate, uParity, uStopBits );
-            break;*/
         default:
             status = MODBUS_STAT_INVALID_VALUE;
             break;

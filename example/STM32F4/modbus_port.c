@@ -16,18 +16,19 @@
 #include "project.h"
 
 //Local Variables
-static volatile bool inTimInterrupt = false;   	//!< Tracks when we are in the timer interrupt to avoid disables
-static volatile bool inUsartInterrupt = false;	//!< Tracks when we are in the Usart interrupt to avoid disables
-uint16_t timeArr = 0;							//!< Auto-reload value for the timer
-void (*rxIntFunc)(uint8_t port);            	//!< The Receive Callback function
-void (*txIntFunc)(uint8_t port);            	//!< The Transmit Callback function
-void (*timeoutIntFunc)(uint8_t port);       	//!< The Timeout Callback function
+static volatile bool inTimInterrupt = false;    //!< Tracks when we are in the timer interrupt to avoid disables
+static volatile bool inUsartInterrupt = false;  //!< Tracks when we are in the Usart interrupt to avoid disables
+uint16_t timeArr = 0;                           //!< Auto-reload value for the timer
+void (*rxIntFunc)(uint8_t port);                //!< The Receive Callback function
+void (*txIntFunc)(uint8_t port);                //!< The Transmit Callback function
+void (*timeoutIntFunc)(uint8_t port);           //!< The Timeout Callback function
+static bool sevenBit;
 
 /*
 static void port_loopback_test(void) {
-	LL_USART_Enable(MB_USART);
-	LL_GPIO_ResetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
-	LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_RX);
+    LL_USART_Enable(MB_USART);
+    LL_GPIO_ResetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
+    LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_RX);
 
     char inChar = 0;
     while(1) {
@@ -35,12 +36,12 @@ static void port_loopback_test(void) {
         //Send character
         //If we have a character send it back
         while(LL_USART_IsActiveFlag_RXNE(MB_USART)) {
-        	//Get character
-        	inChar = LL_USART_ReceiveData8(MB_USART);
+            //Get character
+            inChar = LL_USART_ReceiveData8(MB_USART);
 
             //Disable Receive and enable transmit
-        	LL_GPIO_SetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
-        	LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_TX);
+            LL_GPIO_SetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
+            LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_TX);
 
             //Send character
             LL_USART_TransmitData8(MB_USART, inChar);
@@ -49,8 +50,8 @@ static void port_loopback_test(void) {
             }
 
             //Disable Transmit and enable receive
-        	LL_GPIO_ResetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
-        	LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_RX);
+            LL_GPIO_ResetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
+            LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_RX);
         }
     }
 }
@@ -62,27 +63,28 @@ static void port_loopback_test(void) {
 * Used to receive and send bytes for modbus
 * communications
 */
-void USART1_IRQHandler(void) {
-	inUsartInterrupt = true;
+void USART1_IRQHandler(void)
+{
+    inUsartInterrupt = true;
 
-	if(LL_USART_IsEnabledIT_RXNE(MB_USART) && LL_USART_IsActiveFlag_RXNE(MB_USART)) {
+    if(LL_USART_IsEnabledIT_RXNE(MB_USART) && LL_USART_IsActiveFlag_RXNE(MB_USART)) {
         if(rxIntFunc) {
             rxIntFunc(MB_PORT_NUM);
         } else {
             LL_USART_ReceiveData8(MB_USART);
         }
-	} else if((LL_USART_IsEnabledIT_TC(MB_USART) && LL_USART_IsActiveFlag_TC(MB_USART)) || (LL_USART_IsEnabledIT_TXE(MB_USART) && LL_USART_IsActiveFlag_TXE(MB_USART))) {
+    } else if((LL_USART_IsEnabledIT_TC(MB_USART) && LL_USART_IsActiveFlag_TC(MB_USART)) || (LL_USART_IsEnabledIT_TXE(MB_USART) && LL_USART_IsActiveFlag_TXE(MB_USART))) {
         //Call our tx int callback function if registered
         if(txIntFunc) {
             txIntFunc(MB_PORT_NUM);
         } else {
             //No reload function was defined so disable the int here
-        	LL_USART_DisableIT_TC(MB_USART);
-        	LL_USART_DisableIT_TXE(MB_USART);
+            LL_USART_DisableIT_TC(MB_USART);
+            LL_USART_DisableIT_TXE(MB_USART);
         }
-	}
+    }
 
-	inUsartInterrupt = false;
+    inUsartInterrupt = false;
 }
 
 /*!
@@ -91,24 +93,25 @@ void USART1_IRQHandler(void) {
 * Used to determine timeout for packets which will indicate the end of a
 * received packet.
 */
-void TIM3_IRQHandler(void) {
-	inTimInterrupt = true;
+void TIM3_IRQHandler(void)
+{
+    inTimInterrupt = true;
 
-	//Make sure it was an update event
-	if(MB_TIMER->SR & TIM_SR_UIF) {
-		//Call our callback
-		if(timeoutIntFunc) {
-			timeoutIntFunc(MB_PORT_NUM);
-		} else {
-			//No clear function was defined so disable the timer here
-			modbus_port_timer_enable(MB_PORT_NUM, false);
-		}
+    //Make sure it was an update event
+    if(MB_TIMER->SR & TIM_SR_UIF) {
+        //Call our callback
+        if(timeoutIntFunc) {
+            timeoutIntFunc(MB_PORT_NUM);
+        } else {
+            //No clear function was defined so disable the timer here
+            modbus_port_timer_enable(MB_PORT_NUM, false);
+        }
 
-		//Clear all flags
-		MB_TIMER->SR = 0;
-	}
+        //Clear all flags
+        MB_TIMER->SR = 0;
+    }
 
-	inTimInterrupt = false;
+    inTimInterrupt = false;
 }
 
 /*!
@@ -134,130 +137,137 @@ void TIM3_IRQHandler(void) {
 bool modbus_port_init(uint8_t port, uint32_t baudRate, uint8_t charSize, modbus_parity parity, uint8_t stopBits, uint16_t timeoutBits,
                       void (*rxCallback)(uint8_t port), void (*txCallback)(uint8_t port), void (*timeoutCallback)(uint8_t port))
 {
-	int test, psc, mbTimeout;
+    int test, psc, mbTimeout;
 
-	 //We only have one port!
-	if(port != MB_PORT_NUM) {
-		return false;
-	}
+    //We only have one port!
+    if(port != MB_PORT_NUM) {
+        return false;
+    }
 
-	//Char size > 8 we can't support if parity is on (9th bit needed for parity)
-	if(((charSize > 8) && (parity != MODBUS_PARITY_NONE)) || (parity > 9)) {
-		return false;
-	}
+    //Char size > 8 we can't support if parity is on (9th bit needed for parity)
+    sevenBit = false;
+    if((charSize < 7) || ((charSize > 8) && (parity != MODBUS_PARITY_NONE)) || (parity > 9)) {
+        return false;
+    } else if(charSize == 7) {
+        //The STM32 can't support 7-bit mode so we have to use 2 stop bits and make our 8th bit a stop
+        if((parity != MODBUS_PARITY_NONE) || (stopBits != 2)) {
+            return false;
+        }
+        sevenBit = true;
+    }
 
     //Bind our callbacks
     rxIntFunc = rxCallback;
     txIntFunc = txCallback;
     timeoutIntFunc = timeoutCallback;
 
-	// Enable the peripheral clock of GPIOB
-	LL_AHB1_GRP1_EnableClock(MB_GPIO_PERIPH_CLK);
+    // Enable the peripheral clock of GPIOB
+    LL_AHB1_GRP1_EnableClock(MB_GPIO_PERIPH_CLK);
 
-	// Configure TX Pin as : Alternate function, High Speed, PushPull, Pull up
-	LL_GPIO_SetPinMode(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_MODE_ALTERNATE);
-	LL_GPIO_SetAFPin_0_7(MB_TX_PIN_PORT, MB_TX_PIN_NUM, MB_TX_PIN_MODE);
-	LL_GPIO_SetPinSpeed(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
-	//LL_GPIO_SetPinOutputType(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
-	LL_GPIO_SetPinPull(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_PULL_UP);
+    // Configure TX Pin as : Alternate function, High Speed, PushPull, Pull up
+    LL_GPIO_SetPinMode(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_MODE_ALTERNATE);
+    LL_GPIO_SetAFPin_0_7(MB_TX_PIN_PORT, MB_TX_PIN_NUM, MB_TX_PIN_MODE);
+    LL_GPIO_SetPinSpeed(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
+    //LL_GPIO_SetPinOutputType(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
+    LL_GPIO_SetPinPull(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_PULL_UP);
 
-	// Configure RX Pin as : Alternate function, High Speed, PushPull, Pull up
-	LL_GPIO_SetPinMode(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_MODE_ALTERNATE);
-	LL_GPIO_SetAFPin_0_7(MB_RX_PIN_PORT, MB_RX_PIN_NUM, MB_RX_PIN_MODE);
-	LL_GPIO_SetPinSpeed(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
-	//LL_GPIO_SetPinOutputType(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
-	LL_GPIO_SetPinPull(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_PULL_UP);
+    // Configure RX Pin as : Alternate function, High Speed, PushPull, Pull up
+    LL_GPIO_SetPinMode(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_MODE_ALTERNATE);
+    LL_GPIO_SetAFPin_0_7(MB_RX_PIN_PORT, MB_RX_PIN_NUM, MB_RX_PIN_MODE);
+    LL_GPIO_SetPinSpeed(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
+    //LL_GPIO_SetPinOutputType(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
+    LL_GPIO_SetPinPull(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_PULL_UP);
 
-	//Configure RX Enable pin
-	LL_GPIO_SetPinMode(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_MODE_OUTPUT);
-	LL_GPIO_SetPinSpeed(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
-	LL_GPIO_SetPinOutputType(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
-	LL_GPIO_SetPinPull(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_PULL_DOWN);
+    //Configure RX Enable pin
+    LL_GPIO_SetPinMode(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_MODE_OUTPUT);
+    LL_GPIO_SetPinSpeed(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
+    LL_GPIO_SetPinOutputType(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
+    LL_GPIO_SetPinPull(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_PULL_DOWN);
 
-	//Configure TX Enable pin
+    //Configure TX Enable pin
 #if MB_FULL_DUPLEX
-	LL_GPIO_SetPinMode(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_MODE_OUTPUT);
+    LL_GPIO_SetPinMode(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_MODE_OUTPUT);
 #else
-	LL_GPIO_SetPinMode(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_MODE_INPUT);
+    LL_GPIO_SetPinMode(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_MODE_INPUT);
 #endif
-	LL_GPIO_SetPinSpeed(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
-	LL_GPIO_SetPinOutputType(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
-	LL_GPIO_SetPinPull(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_PULL_DOWN);
+    LL_GPIO_SetPinSpeed(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
+    LL_GPIO_SetPinOutputType(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
+    LL_GPIO_SetPinPull(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_PULL_DOWN);
 
-	//Configure RS485 Enable pin and turn ON
-	LL_GPIO_SetPinMode(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM, LL_GPIO_MODE_OUTPUT);
-	LL_GPIO_SetPinSpeed(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
-	LL_GPIO_SetPinOutputType(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
-	LL_GPIO_SetPinPull(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM, LL_GPIO_PULL_UP);
-	LL_GPIO_ResetOutputPin(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM);
+    //Configure RS485 Enable pin and turn ON
+    LL_GPIO_SetPinMode(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM, LL_GPIO_MODE_OUTPUT);
+    LL_GPIO_SetPinSpeed(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM, LL_GPIO_SPEED_FREQ_HIGH);
+    LL_GPIO_SetPinOutputType(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM, LL_GPIO_OUTPUT_PUSHPULL);
+    LL_GPIO_SetPinPull(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM, LL_GPIO_PULL_UP);
+    LL_GPIO_ResetOutputPin(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM);
 
-	// Set priority for USART IRQn
-	NVIC_SetPriority(MB_USART_IRQ, 0);
+    // Set priority for USART IRQn
+    NVIC_SetPriority(MB_USART_IRQ, 0);
 
-	// Enable the USART Clock
-	LL_APB2_GRP1_EnableClock(MB_USART_PERIPH_CLK);
+    // Enable the USART Clock
+    LL_APB2_GRP1_EnableClock(MB_USART_PERIPH_CLK);
 
-	// Disable USART1 prior modifying configuration registers and by default
-	LL_USART_Disable(MB_USART);
+    // Disable USART1 prior modifying configuration registers and by default
+    LL_USART_Disable(MB_USART);
 
-	// TX/RX direction - both disable to start
-	LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_NONE);
+    // TX/RX direction - both disable to start
+    LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_NONE);
 
-	// Configure according to parameters
-	LL_USART_ConfigCharacter(MB_USART, (((charSize == 9) || ((charSize == 8) && (parity != MODBUS_PARITY_NONE)))?LL_USART_DATAWIDTH_9B:LL_USART_DATAWIDTH_8B), ((parity == MODBUS_PARITY_EVEN)?LL_USART_PARITY_EVEN:((parity == MODBUS_PARITY_ODD)?LL_USART_PARITY_ODD:LL_USART_PARITY_NONE)), ((stopBits == 2)?LL_USART_STOPBITS_2:LL_USART_STOPBITS_1));
+    // Configure according to parameters
+    LL_USART_ConfigCharacter(MB_USART, (((charSize == 9) || ((charSize == 8) && (parity != MODBUS_PARITY_NONE)))?LL_USART_DATAWIDTH_9B:LL_USART_DATAWIDTH_8B), ((parity == MODBUS_PARITY_EVEN)?LL_USART_PARITY_EVEN:((parity == MODBUS_PARITY_ODD)?LL_USART_PARITY_ODD:LL_USART_PARITY_NONE)), ((stopBits == 2)?LL_USART_STOPBITS_2:LL_USART_STOPBITS_1));
 
-	// No Hardware Flow Control we will move the pin manually
-	LL_USART_SetHWFlowCtrl(MB_USART, LL_USART_HWCONTROL_NONE);
+    // No Hardware Flow Control we will move the pin manually
+    LL_USART_SetHWFlowCtrl(MB_USART, LL_USART_HWCONTROL_NONE);
 
-	// Oversampling by 16
-	LL_USART_SetOverSampling(MB_USART, LL_USART_OVERSAMPLING_16);
+    // Oversampling by 16
+    LL_USART_SetOverSampling(MB_USART, LL_USART_OVERSAMPLING_16);
 
-	// Set Baudrate to correct value using APB frequency set to 100000000 Hz
-	// Frequency available for USART peripheral can also be calculated through LL RCC macro
-	/* Ex :
-	  Periphclk = LL_RCC_GetUSARTClockFreq(Instance); or LL_RCC_GetUARTClockFreq(Instance); depending on USART/UART instance
-	  In this example, Peripheral Clock is expected to be equal to 100000000 Hz => equal to SystemCoreClock
-	*/
-	LL_USART_SetBaudRate(MB_USART, SystemCoreClock, LL_USART_OVERSAMPLING_16, baudRate);
+    // Set Baudrate to correct value using APB frequency set to 100000000 Hz
+    // Frequency available for USART peripheral can also be calculated through LL RCC macro
+    /* Ex :
+      Periphclk = LL_RCC_GetUSARTClockFreq(Instance); or LL_RCC_GetUARTClockFreq(Instance); depending on USART/UART instance
+      In this example, Peripheral Clock is expected to be equal to 100000000 Hz => equal to SystemCoreClock
+    */
+    LL_USART_SetBaudRate(MB_USART, SystemCoreClock, LL_USART_OVERSAMPLING_16, baudRate);
 
-	//TEST FUNCTION COMMENT OUT NORMALLY!!!
-	//port_loopback_test();
+    //TEST FUNCTION COMMENT OUT NORMALLY!!!
+    //port_loopback_test();
 
-	//Setup our timer
-	LL_APB1_GRP1_EnableClock(MB_TIM_PERIPH_CLK);
-	MB_TIMER->CR1 = 0;   // Disable timer
-	NVIC_DisableIRQ(MB_TIMER_IRQ); // Disable IRQ
+    //Setup our timer
+    LL_APB1_GRP1_EnableClock(MB_TIM_PERIPH_CLK);
+    MB_TIMER->CR1 = 0;   // Disable timer
+    NVIC_DisableIRQ(MB_TIMER_IRQ); // Disable IRQ
 
-	//Turn the bits into timer clocks (time clock = Sysclk/AHB * 2 /APB1)
-	mbTimeout = ((int)timeoutBits * ((int)(((SystemCoreClock/CLK_AHB_DIVIDER_VAL)*2)/CLK_APB1_DIVIDER_VAL)/(int)baudRate));
+    //Turn the bits into timer clocks (time clock = Sysclk/AHB * 2 /APB1)
+    mbTimeout = ((int)timeoutBits * ((int)(((SystemCoreClock/CLK_AHB_DIVIDER_VAL)*2)/CLK_APB1_DIVIDER_VAL)/(int)baudRate));
 
-	//Now lets find a prescaler and ARR that works
-	test = -1;
-	psc = 0;
-	do {
-		test++;
-		if(mbTimeout%(test+1) == 0) {
-			psc = test;
-		}
-	} while(((mbTimeout/(test+1)) > 1000) && (psc < 65536));
-	timeArr = (mbTimeout/(psc+1));
-	MB_TIMER->PSC = psc;	        	// Set prescaler
-	MB_TIMER->ARR = timeArr;			// Auto reload value
-	MB_TIMER->DIER = TIM_DIER_UIE; 		// Enable update interrupt (timer level)
+    //Now lets find a prescaler and ARR that works
+    test = -1;
+    psc = 0;
+    do {
+        test++;
+        if(mbTimeout%(test+1) == 0) {
+            psc = test;
+        }
+    } while(((mbTimeout/(test+1)) > 1000) && (psc < 65536));
+    timeArr = (mbTimeout/(psc+1));
+    MB_TIMER->PSC = psc;                // Set prescaler
+    MB_TIMER->ARR = timeArr;            // Auto reload value
+    MB_TIMER->DIER = TIM_DIER_UIE;      // Enable update interrupt (timer level)
 
-	//TEST TIMER
-	//modbus_port_timer_enable(port, true);
-	//NVIC_EnableIRQ(MB_TIMER_IRQ);
-	//while(1);
+    //TEST TIMER
+    //modbus_port_timer_enable(port, true);
+    //NVIC_EnableIRQ(MB_TIMER_IRQ);
+    //while(1);
 
-	//Enable the USART
-	LL_USART_Enable(MB_USART);
+    //Enable the USART
+    LL_USART_Enable(MB_USART);
 
-	// Setup the correct mode
-	modbus_port_serial_enable(port, false, false);
+    // Setup the correct mode
+    modbus_port_serial_enable(port, false, false);
 
-	LL_USART_EnableIT_RXNE(MB_USART);
-	LL_USART_EnableIT_ERROR(MB_USART);
+    LL_USART_EnableIT_RXNE(MB_USART);
+    LL_USART_EnableIT_ERROR(MB_USART);
 
     return true;
 }
@@ -278,61 +288,61 @@ bool modbus_port_init(uint8_t port, uint32_t baudRate, uint8_t charSize, modbus_
 */
 void modbus_port_serial_enable(uint8_t port, bool rxEnable, bool txEnable)
 {
-	//We only have one port, if not it then abort
-	if(port != MB_PORT_NUM) {
-		return;
-	}
+    //We only have one port, if not it then abort
+    if(port != MB_PORT_NUM) {
+        return;
+    }
 
-	//Disable Interrupts
-	NVIC_DisableIRQ(MB_USART_IRQ);
-	NVIC_DisableIRQ(MB_TIMER_IRQ);
+    //Disable Interrupts
+    NVIC_DisableIRQ(MB_USART_IRQ);
+    NVIC_DisableIRQ(MB_TIMER_IRQ);
 
-	//Disable tx complete int
-	LL_USART_DisableIT_TC(MB_USART);
+    //Disable tx complete int
+    LL_USART_DisableIT_TC(MB_USART);
 
-	//Set the RX up
-	if(rxEnable) {
-		//Configure the USART rx interrupt
-		LL_USART_EnableIT_RXNE(MB_USART);
+    //Set the RX up
+    if(rxEnable) {
+        //Configure the USART rx interrupt
+        LL_USART_EnableIT_RXNE(MB_USART);
 
-		//Start the timer
-		MB_TIMER->CNT = 0;
-		MB_TIMER->CR1 = TIM_CR1_CEN;   // Enable timer
+        //Start the timer
+        MB_TIMER->CNT = 0;
+        MB_TIMER->CR1 = TIM_CR1_CEN;   // Enable timer
 
-		//RX Pin mode
-		LL_GPIO_ResetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
-	} else {
-		LL_USART_DisableIT_RXNE(MB_USART);
-		MB_TIMER->CR1 = 0;   // Disable timer
+        //RX Pin mode
+        LL_GPIO_ResetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
+    } else {
+        LL_USART_DisableIT_RXNE(MB_USART);
+        MB_TIMER->CR1 = 0;   // Disable timer
 
-		//RX Pin mode
-		LL_GPIO_SetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
-	}
+        //RX Pin mode
+        LL_GPIO_SetOutputPin(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM);
+    }
 
-	//Set the TX up
-	if(txEnable && !rxEnable) {
-		//Configure the USART tx interrupt
-		LL_USART_EnableIT_TXE(MB_USART);
+    //Set the TX up
+    if(txEnable && !rxEnable) {
+        //Configure the USART tx interrupt
+        LL_USART_EnableIT_TXE(MB_USART);
 
-		//TX Pin Mode if full duplex
+        //TX Pin Mode if full duplex
 #if MB_FULL_DUPLEX
-		LL_GPIO_ResetOutputPin(MB_TXEN_GPIO_PORT, MB_TXEN_GPIO_PIN);
+        LL_GPIO_ResetOutputPin(MB_TXEN_GPIO_PORT, MB_TXEN_GPIO_PIN);
 #endif
-	} else {
-		LL_USART_DisableIT_TXE(MB_USART);
+    } else {
+        LL_USART_DisableIT_TXE(MB_USART);
 
-		//TX Pin Mode if full duplex
+        //TX Pin Mode if full duplex
 #if MB_FULL_DUPLEX
-		LL_GPIO_ResetOutputPin(MB_TXEN_GPIO_PORT, MB_TXEN_GPIO_PIN);
+        LL_GPIO_ResetOutputPin(MB_TXEN_GPIO_PORT, MB_TXEN_GPIO_PIN);
 #endif
-	}
+    }
 
-	//Set the appropriate direction
-	LL_USART_SetTransferDirection(MB_USART, ((rxEnable?LL_USART_DIRECTION_RX:LL_USART_DIRECTION_NONE) | (txEnable?LL_USART_DIRECTION_TX:LL_USART_DIRECTION_NONE)));
+    //Set the appropriate direction
+    LL_USART_SetTransferDirection(MB_USART, ((rxEnable?LL_USART_DIRECTION_RX:LL_USART_DIRECTION_NONE) | (txEnable?LL_USART_DIRECTION_TX:LL_USART_DIRECTION_NONE)));
 
-	//Reenable the interrupts
-	NVIC_EnableIRQ(MB_USART_IRQ);
-	NVIC_EnableIRQ(MB_TIMER_IRQ);
+    //Reenable the interrupts
+    NVIC_EnableIRQ(MB_USART_IRQ);
+    NVIC_EnableIRQ(MB_TIMER_IRQ);
 }
 
 /*!
@@ -345,36 +355,36 @@ void modbus_port_serial_enable(uint8_t port, bool rxEnable, bool txEnable)
 */
 void modbus_port_serial_close(uint8_t port)
 {
-	//We only have one port, so if not it then abort
-	if(port != MB_PORT_NUM) {
-		return;
-	}
+    //We only have one port, so if not it then abort
+    if(port != MB_PORT_NUM) {
+        return;
+    }
 
-	//Disable all the interrupts
-	NVIC_DisableIRQ(MB_TIMER_IRQ);
-	NVIC_DisableIRQ(MB_USART_IRQ);
-	LL_USART_DisableIT_TC(MB_USART);
-	LL_USART_DisableIT_TXE(MB_USART);
-	LL_USART_DisableIT_RXNE(MB_USART);
+    //Disable all the interrupts
+    NVIC_DisableIRQ(MB_TIMER_IRQ);
+    NVIC_DisableIRQ(MB_USART_IRQ);
+    LL_USART_DisableIT_TC(MB_USART);
+    LL_USART_DisableIT_TXE(MB_USART);
+    LL_USART_DisableIT_RXNE(MB_USART);
 
-	//Turn off RX and TX
-	LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_NONE);
+    //Turn off RX and TX
+    LL_USART_SetTransferDirection(MB_USART, LL_USART_DIRECTION_NONE);
 
-	//Turn all our pins to input to go to power save
-	LL_GPIO_SetPinMode(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_MODE_INPUT);
-	LL_GPIO_SetPinMode(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_MODE_INPUT);
-	LL_GPIO_SetPinMode(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_MODE_INPUT);
-	LL_GPIO_SetPinMode(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_MODE_INPUT);
-	LL_GPIO_SetOutputPin(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM);
+    //Turn all our pins to input to go to power save
+    LL_GPIO_SetPinMode(MB_TX_PIN_PORT, MB_TX_PIN_NUM, LL_GPIO_MODE_INPUT);
+    LL_GPIO_SetPinMode(MB_RX_PIN_PORT, MB_RX_PIN_NUM, LL_GPIO_MODE_INPUT);
+    LL_GPIO_SetPinMode(MB_RXEN_PIN_PORT, MB_RXEN_PIN_NUM, LL_GPIO_MODE_INPUT);
+    LL_GPIO_SetPinMode(MB_TXEN_PIN_PORT, MB_TXEN_PIN_NUM, LL_GPIO_MODE_INPUT);
+    LL_GPIO_SetOutputPin(MB_485EN_PIN_PORT, MB_485EN_PIN_NUM);
 
-	//Disable the UART
-	LL_USART_Disable(MB_USART);
+    //Disable the UART
+    LL_USART_Disable(MB_USART);
 
-	//Disable the timer
-	MB_TIMER->CR1 = 0;
+    //Disable the timer
+    MB_TIMER->CR1 = 0;
 
-	//Turn the Clock off
-	LL_APB2_GRP1_DisableClock(MB_USART_PERIPH_CLK);
+    //Turn the Clock off
+    LL_APB2_GRP1_DisableClock(MB_USART_PERIPH_CLK);
 }
 
 /*!
@@ -388,13 +398,13 @@ void modbus_port_serial_close(uint8_t port)
 */
 void modbus_port_notify_of_tx_completion(uint8_t port)
 {
-	//We only have one port, so if not it then abort
-	if(port != MB_PORT_NUM) {
-		return;
-	}
+    //We only have one port, so if not it then abort
+    if(port != MB_PORT_NUM) {
+        return;
+    }
 
-	LL_USART_DisableIT_TXE(MB_USART);
-	LL_USART_EnableIT_TC(MB_USART);
+    LL_USART_DisableIT_TXE(MB_USART);
+    LL_USART_EnableIT_TC(MB_USART);
 }
 
 /*!
@@ -409,20 +419,20 @@ void modbus_port_notify_of_tx_completion(uint8_t port)
 */
 void modbus_port_enable_interrupts(uint8_t port, bool enable)
 {
-	//We only have one port, so if not it then abort
-	if(port != MB_PORT_NUM) {
-		return;
-	}
+    //We only have one port, so if not it then abort
+    if(port != MB_PORT_NUM) {
+        return;
+    }
 
-	//Since all functionality is within the UART interrupt then don't bother
-	//disabling if we are in the interrupt routine.
-	if(!inUsartInterrupt && !inTimInterrupt && enable) {
-		NVIC_EnableIRQ(MB_USART_IRQ);
-		NVIC_EnableIRQ(MB_TIMER_IRQ);
-	} else if(!inUsartInterrupt && !inTimInterrupt) {
-		NVIC_DisableIRQ(MB_USART_IRQ);
-		NVIC_DisableIRQ(MB_TIMER_IRQ);
-	}
+    //Since all functionality is within the UART interrupt then don't bother
+    //disabling if we are in the interrupt routine.
+    if(!inUsartInterrupt && !inTimInterrupt && enable) {
+        NVIC_EnableIRQ(MB_USART_IRQ);
+        NVIC_EnableIRQ(MB_TIMER_IRQ);
+    } else if(!inUsartInterrupt && !inTimInterrupt) {
+        NVIC_DisableIRQ(MB_USART_IRQ);
+        NVIC_DisableIRQ(MB_TIMER_IRQ);
+    }
 }
 
 /*!
@@ -444,8 +454,8 @@ bool modbus_port_put_byte(uint8_t port, uint8_t sndByte)
     }
 
     if(LL_USART_IsActiveFlag_TXE(MB_USART)) {
-    	LL_USART_TransmitData8(MB_USART, sndByte);
-    	return true;
+        LL_USART_TransmitData8(MB_USART, (sevenBit?(0x80 | sndByte):sndByte));
+        return true;
     }
 
     return false;
@@ -471,17 +481,21 @@ bool modbus_port_get_byte(uint8_t port, uint8_t *getByte)
 
     //Read the character if no errors
     if(!LL_USART_IsActiveFlag_PE(MB_USART) && !LL_USART_IsActiveFlag_FE(MB_USART)
-		&& !LL_USART_IsActiveFlag_NE(MB_USART) && !LL_USART_IsActiveFlag_ORE(MB_USART)
-		&& LL_USART_IsActiveFlag_RXNE(MB_USART)) {
-    	*getByte = LL_USART_ReceiveData8(MB_USART);
-    	return true;
-	} else {
-		//Clear errors and start fresh
-		LL_USART_ClearFlag_PE(MB_USART);
-		LL_USART_ClearFlag_FE(MB_USART);
-		LL_USART_ClearFlag_NE(MB_USART);
-		LL_USART_ClearFlag_ORE(MB_USART);
-	}
+            && !LL_USART_IsActiveFlag_NE(MB_USART) && !LL_USART_IsActiveFlag_ORE(MB_USART)
+            && LL_USART_IsActiveFlag_RXNE(MB_USART)) {
+        *getByte = LL_USART_ReceiveData8(MB_USART);
+        //If seven-bit it means the last bit is our stop bit we need to mask off
+        if(sevenBit) {
+            *getByte &= 0x7F;
+        }
+        return true;
+    } else {
+        //Clear errors and start fresh
+        LL_USART_ClearFlag_PE(MB_USART);
+        LL_USART_ClearFlag_FE(MB_USART);
+        LL_USART_ClearFlag_NE(MB_USART);
+        LL_USART_ClearFlag_ORE(MB_USART);
+    }
 
     return false;
 }
@@ -506,10 +520,10 @@ void modbus_port_timer_enable(uint8_t port, bool enable)
 
     //Enable or disable as requested
     if(enable) {
-    	//Even if already enabled reset the count here
-    	MB_TIMER->CNT = 0;
-    	MB_TIMER->CR1 = TIM_CR1_CEN;   // Enable timer
+        //Even if already enabled reset the count here
+        MB_TIMER->CNT = 0;
+        MB_TIMER->CR1 = TIM_CR1_CEN;   // Enable timer
     } else {
-    	MB_TIMER->CR1 = 0;   // Disable timer
+        MB_TIMER->CR1 = 0;   // Disable timer
     }
 }
