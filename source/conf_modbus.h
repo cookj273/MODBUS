@@ -21,7 +21,9 @@
 #define NUM_MODBUS_PORTS                            1       //!< Number of MODBUS Ports available for use
 #define MODBUS_RTU_ENABLED                          1       //!< If Modbus RTU support is enabled
 #define MODBUS_ASCII_ENABLED                        1       //!< If Modbus ASCII support is enabled
-#define MODBUS_TCP_ENABLED                          0       //!< If Modbus TCP support is enabled
+#define MODBUS_TCP_ENABLED                          1       //!< If Modbus TCP support is enabled
+
+#define MB_TCP_DEFAULT_PORT     502
 
 #if MODBUS_ASCII_ENABLED > 0 && MODBUS_RTU_ENABLED < 1
 #error MODBUS ASCII Mode requires RTU mode to also be enabled!

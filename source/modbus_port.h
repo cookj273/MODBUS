@@ -14,6 +14,7 @@
 #define MODBUS_PORT_H_
 //Includes
 #include "conf_modbus.h"
+#include "modbus_module.h"
 
 /*!
 * @brief This function initializes the appropriate hardware to perform communications
@@ -125,5 +126,14 @@ bool modbus_port_get_byte(uint8_t port, uint8_t *getByte);
 * @param enable True will enable, reset, and start timer and false will disable
 */
 void modbus_port_timer_enable(uint8_t port, bool enable);
+
+
+#if MODBUS_TCP_ENABLED > 0
+bool modbus_port_tcp_init(uint8_t modPort, uint16_t tcpPort, uint16_t timeoutSec, modbus_device_types deviceType,
+                          void (*rxCallback)(uint8_t port), void (*txCallback)(uint8_t port), void (*timeoutCallback)(uint8_t port));
+
+void modbus_tcp_set_tx_slave(uint8_t port, uint8_t slaveAddress);
+
+#endif
 
 #endif /* MODBUS_PORT_H_ */

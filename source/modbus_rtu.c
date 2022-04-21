@@ -28,48 +28,11 @@
 #endif
 
 //Typedefs
-/*!
-* The following defines the different RTU receive states
-*/
-typedef enum {
-    STATE_RX_INIT,              //!< Receiver is in initial state.
-    STATE_RX_IDLE,              //!< Receiver is in idle state.
-    STATE_RX_RCV,               //!< Frame is beeing received.
-#if MODBUS_ASCII_ENABLED > 0
-    STATE_RX_WAIT_EOF,          //!< Wait for EOF in ASCII mode.
-#endif
-    STATE_RX_ERROR,             //!< If the frame is invalid.
-    STATE_RX_COMPLETE,          //!< A full frame was received
-    STATE_RX_OFF
-} rtu_rx_states;
-
-/*!
-* The following defines the different RTU transmit states
-*/
-typedef enum {
-    STATE_TX_IDLE,              //!< Transmitter is in idle state.
-    STATE_TX_XMIT,              //!< Transmitter is in transfer state.
-#if MODBUS_ASCII_ENABLED > 0
-    STATE_TX_ASCII_H,           //!< Send the high nibble of the next character
-    STATE_TX_ASCII_L,           //!< Send the low nibble of the next character
-    STATE_TX_ASCII_END,         //!< Send the EOF for ASCII mode
-#endif
-    STATE_TX_WAIT               //!< After last byte transfer we need to wait for hardware to send before going back to receive
-} rtu_tx_states;
 
 //Local Variables
-static volatile rtu_tx_states txState[NUM_MODBUS_PORTS];              //!< Tracks the current tx state
-static volatile rtu_rx_states rxState[NUM_MODBUS_PORTS];              //!< Tracks the current rx state
-static volatile bool frameTxComplete[NUM_MODBUS_PORTS];               //!< Indicates when a full frame has finished transmitting
-
-volatile uint8_t RTUBuf[NUM_MODBUS_PORTS][MODBUS_SER_PDU_SIZE_MAX];   //!< Store both data received and transmitted
-static volatile uint16_t rxBufferPos[NUM_MODBUS_PORTS];               //!< RX position (what byte is next)
-static volatile uint8_t *txBufferCur[NUM_MODBUS_PORTS];               //!< TX position (what byte to send next)
-static volatile uint16_t txBufferCount[NUM_MODBUS_PORTS];             //!< Total number of bytes to transmit
 #if MODBUS_ASCII_ENABLED > 0
 static volatile uint8_t rxBytePos[NUM_MODBUS_PORTS];                  //!< RX nibble for ASCII mode
 #endif
-static volatile modbus_modes portMode[NUM_MODBUS_PORTS];              //!< Stores the mode ID for each port
 
 #if MODBUS_ASCII_ENABLED > 0
 /*!
@@ -186,7 +149,7 @@ static void modbus_rtu_receive_fsm(uint8_t port)
         } else {
 #endif
             rxBufferPos[port] = 0;
-            RTUBuf[port][rxBufferPos[port]++] = newByte;
+            mbDataBuf[port][rxBufferPos[port]++] = newByte;
             rxState[port] = STATE_RX_RCV;
 
             // Enable t3.5 timers.
@@ -210,16 +173,16 @@ static void modbus_rtu_receive_fsm(uint8_t port)
                     rxState[port] = STATE_RX_WAIT_EOF;
                 } else {
                     if(rxBytePos[port]) {
-                        RTUBuf[port][rxBufferPos[port]++] |= char2Binary(newByte);
+                        mbDataBuf[port][rxBufferPos[port]++] |= char2Binary(newByte);
                         rxBytePos[port] = 0;
                     } else {
-                        RTUBuf[port][rxBufferPos[port]] = ((char2Binary(newByte)<<4) & 0xF0);
+                        mbDataBuf[port][rxBufferPos[port]] = ((char2Binary(newByte)<<4) & 0xF0);
                         rxBytePos[port] = 1;
                     }
                 }
             } else {
 #endif
-                RTUBuf[port][rxBufferPos[port]++] = newByte;
+                mbDataBuf[port][rxBufferPos[port]++] = newByte;
 #if MODBUS_ASCII_ENABLED > 0
             }
 #endif
@@ -523,11 +486,11 @@ modbus_status modbus_rtu_receive(uint8_t port, uint8_t *slaveAddress, uint8_t **
 #endif
                    MODBUS_SER_PDU_SIZE_MIN)) && ((
 #if MODBUS_ASCII_ENABLED > 0
-                               (portMode[port] == MODBUS_ASCII) && (chksum_calculate(0, (uint8_t *)RTUBuf[port], rxBufferPos[port]) == 0)) || ((portMode[port] == MODBUS_RTU) &&
+                               (portMode[port] == MODBUS_ASCII) && (chksum_calculate(0, (uint8_t *)mbDataBuf[port], rxBufferPos[port]) == 0)) || ((portMode[port] == MODBUS_RTU) &&
 #endif
-                                       (crc16_calculate(0xFFFF, (uint8_t *)RTUBuf[port], rxBufferPos[port]) == 0)))) {
+                                       (crc16_calculate(0xFFFF, (uint8_t *)mbDataBuf[port], rxBufferPos[port]) == 0)))) {
         // Save the address field. All frames are passed to the upper layed and the decision if a frame is used is done there.
-        *slaveAddress = RTUBuf[port][MODBUS_SER_PDU_ADDR_OFF];
+        *slaveAddress = mbDataBuf[port][MODBUS_SER_PDU_ADDR_OFF];
 
         // Total length of Modbus-PDU is Modbus-Serial-Line-PDU minus size of address field and CRC checksum.
 #if MODBUS_ASCII_ENABLED > 0
@@ -541,7 +504,7 @@ modbus_status modbus_rtu_receive(uint8_t port, uint8_t *slaveAddress, uint8_t **
 #endif
 
         // Return the start of the Modbus PDU to the caller.
-        *frame = (uint8_t *)(&RTUBuf[port][MODBUS_SER_PDU_PDU_OFF]);
+        *frame = (uint8_t *)(&mbDataBuf[port][MODBUS_SER_PDU_PDU_OFF]);
         rxState[port] = STATE_RX_IDLE;
     } else {
         //Bad CRC or length so back to idle and report error
@@ -594,13 +557,13 @@ modbus_status modbus_rtu_transmit(uint8_t port, uint8_t slaveAddress, const uint
         if(portMode[port] == MODBUS_ASCII) {
             // Calculate CRC16 checksum for Modbus-Serial-Line-PDU.
             CRC16 = chksum_calculate(0, (uint8_t *)txBufferCur[port], txBufferCount[port]);
-            RTUBuf[port][txBufferCount[port]++] = (uint8_t)(CRC16 & 0xFF);
+            mbDataBuf[port][txBufferCount[port]++] = (uint8_t)(CRC16 & 0xFF);
         } else {
 #endif
             // Calculate CRC16 checksum for Modbus-Serial-Line-PDU.
             CRC16 = crc16_calculate(0xFFFF, (uint8_t *)txBufferCur[port], txBufferCount[port]);
-            RTUBuf[port][txBufferCount[port]++] = (uint8_t)(CRC16 & 0xFF);
-            RTUBuf[port][txBufferCount[port]++] = (uint8_t)(CRC16 >> 8);
+            mbDataBuf[port][txBufferCount[port]++] = (uint8_t)(CRC16 & 0xFF);
+            mbDataBuf[port][txBufferCount[port]++] = (uint8_t)(CRC16 >> 8);
 #if MODBUS_ASCII_ENABLED > 0
         }
 #endif
@@ -659,7 +622,7 @@ bool modbus_rtu_get_tx_buffer(uint8_t port, uint8_t **buf)
     //Put rx into off state if in an appropriate place so no messages are received
     if(getResult) {
         rxState[port] = STATE_RX_OFF;
-        *buf = (uint8_t *)&RTUBuf[port][MODBUS_SER_PDU_PDU_OFF];
+        *buf = (uint8_t *)&mbDataBuf[port][MODBUS_SER_PDU_PDU_OFF];
     } else {
         *buf = NULL;
     }

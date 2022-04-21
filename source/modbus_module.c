@@ -14,6 +14,7 @@
 #include "modbus_module.h"
 #include "modbus_rtu.h"
 #include "modbus_callbacks.h"
+#include "modbus_tcp.h"
 
 //Defines
 #define MODBUS_PDU_FUNC_OFF         0       //!< Offset of function code in PDU.
@@ -132,6 +133,15 @@ static struct {
     bool (*masterReadCoilsCallback)(uint8_t port, uint8_t slaveAddress, modbus_function_codes functionCode, uint16_t address, uint8_t *vals, uint16_t qty);       //!< Callback to handler coil/discrete reads
 } modbusInfo[NUM_MODBUS_PORTS];
 
+volatile mb_tx_states txState[NUM_MODBUS_PORTS];              //!< Tracks the current tx state
+volatile mb_rx_states rxState[NUM_MODBUS_PORTS];              //!< Tracks the current rx state
+volatile bool frameTxComplete[NUM_MODBUS_PORTS];               //!< Indicates when a full frame has finished transmitting
+volatile uint8_t mbDataBuf[NUM_MODBUS_PORTS][MODBUS_PDU_SIZE_MAX];   //!< Store both data received and transmitted
+volatile uint16_t rxBufferPos[NUM_MODBUS_PORTS];               //!< RX position (what byte is next)
+volatile uint8_t *txBufferCur[NUM_MODBUS_PORTS];               //!< TX position (what byte to send next)
+volatile uint16_t txBufferCount[NUM_MODBUS_PORTS];             //!< Total number of bytes to transmit
+volatile modbus_modes portMode[NUM_MODBUS_PORTS];              //!< Stores the mode ID for each port
+
 /*!
 * @brief Initializes modbus functionality so that we are ready for communication
 *
@@ -148,14 +158,14 @@ static struct {
 *
 * @return Status value indicating the result of the init
 */
-modbus_status modbus_module_init(uint8_t port, modbus_modes mode, modbus_device_types deviceType, uint8_t slaveAddress, uint32_t baudRate, modbus_parity parity, uint8_t stopBits)
+modbus_status modbus_module_init(uint8_t port, modbus_modes mode, modbus_device_types deviceType, uint8_t slaveAddress, uint32_t baudRate, modbus_parity parity, uint8_t stopBits, uint16_t tcpPort)
 {
     modbus_status status;
 
     // check preconditions
-    if((deviceType == MODBUS_MASTER_DEVICE) || ((deviceType == MODBUS_SLAVE_DEVICE) && (slaveAddress != MODBUS_ADDRESS_BROADCAST)
-            && (slaveAddress >= MODBUS_ADDRESS_MIN) && (slaveAddress <= MODBUS_ADDRESS_MAX))) {
-        modbusInfo[port].unitAddress = slaveAddress;
+    if((deviceType == MODBUS_MASTER_DEVICE) || ((deviceType == MODBUS_SLAVE_DEVICE) && ((mode == MODBUS_TCP) || ((slaveAddress != MODBUS_ADDRESS_BROADCAST)
+            && (slaveAddress >= MODBUS_ADDRESS_MIN) && (slaveAddress <= MODBUS_ADDRESS_MAX))))) {
+        modbusInfo[port].unitAddress = ((mode == MODBUS_TCP)?MB_TCP_PSEUDO_ADDRESS:slaveAddress);
         modbusInfo[port].deviceType = deviceType;
         modbusInfo[port].lastFunctionCode = MODBUS_FUNC_NONE;
 
@@ -181,6 +191,25 @@ modbus_status modbus_module_init(uint8_t port, modbus_modes mode, modbus_device_
 
             status = modbus_rtu_init(mode, port, baudRate, parity, stopBits);
             break;
+#if MODBUS_TCP_ENABLED > 0
+        case MODBUS_TCP:
+            modbusInfo[port].commsEnable = modbus_rtu_enable;
+            modbusInfo[port].frameTransmit = modbus_tcp_transmit;
+            modbusInfo[port].frameReceive = modbus_tcp_receive;
+            modbusInfo[port].frameComplete = modbus_tcp_transmit_complete;
+            modbusInfo[port].hasFrames = modbus_tcp_has_frames;
+            modbusInfo[port].commsClose = modbus_tcp_close;
+            if(modbusInfo[port].deviceType == MODBUS_SLAVE_DEVICE) {
+                modbusInfo[port].frameReleaseBuffer = modbus_tcp_no_response;
+                modbusInfo[port].getTxBuffer = NULL;
+            } else {
+                modbusInfo[port].frameReleaseBuffer = modbus_tcp_release_tx_buffer;
+                modbusInfo[port].getTxBuffer = modbus_tcp_get_tx_buffer;
+            }
+
+            status = modbus_tcp_init(port, tcpPort, deviceType);
+            break;
+#endif
         default:
             status = MODBUS_STAT_INVALID_VALUE;
             break;

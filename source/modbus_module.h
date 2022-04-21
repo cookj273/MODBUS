@@ -17,7 +17,7 @@
 
 //Version
 #define MODBUS_LIBRARY_MAJOR_VERSION    1
-#define MODBUS_LIBRARY_MINOR_VERSION    3
+#define MODBUS_LIBRARY_MINOR_VERSION    4
 
 //Defines
 #define MODBUS_FUNC_ERROR       128                                         //!< FUNCTION ERROR MASK (OR WITH ORIGINAL FUNCTION CODE TO INDICATE ERROR)
@@ -110,6 +110,43 @@ typedef enum {
     MODBUS_SLAVE_DEVICE=0,      //!< Slave device, respond to commands
     MODBUS_MASTER_DEVICE=1,    //!< Master device, transmit commands and wait
 } modbus_device_types;
+/*!
+* The following defines the different RTU receive states
+*/
+typedef enum {
+    STATE_RX_INIT,              //!< Receiver is in initial state.
+    STATE_RX_IDLE,              //!< Receiver is in idle state.
+    STATE_RX_RCV,               //!< Frame is beeing received.
+#if MODBUS_ASCII_ENABLED > 0
+    STATE_RX_WAIT_EOF,          //!< Wait for EOF in ASCII mode.
+#endif
+    STATE_RX_ERROR,             //!< If the frame is invalid.
+    STATE_RX_COMPLETE,          //!< A full frame was received
+    STATE_RX_OFF
+} mb_rx_states;
+
+/*!
+* The following defines the different RTU transmit states
+*/
+typedef enum {
+    STATE_TX_IDLE,              //!< Transmitter is in idle state.
+    STATE_TX_XMIT,              //!< Transmitter is in transfer state.
+#if MODBUS_ASCII_ENABLED > 0
+    STATE_TX_ASCII_H,           //!< Send the high nibble of the next character
+    STATE_TX_ASCII_L,           //!< Send the low nibble of the next character
+    STATE_TX_ASCII_END,         //!< Send the EOF for ASCII mode
+#endif
+    STATE_TX_WAIT               //!< After last byte transfer we need to wait for hardware to send before going back to receive
+} mb_tx_states;
+
+extern volatile mb_tx_states txState[NUM_MODBUS_PORTS];              //!< Tracks the current tx state
+extern volatile mb_rx_states rxState[NUM_MODBUS_PORTS];              //!< Tracks the current rx state
+extern volatile bool frameTxComplete[NUM_MODBUS_PORTS];               //!< Indicates when a full frame has finished transmitting
+extern volatile uint8_t mbDataBuf[NUM_MODBUS_PORTS][MODBUS_PDU_SIZE_MAX];   //!< Store both data received and transmitted
+extern volatile uint16_t rxBufferPos[NUM_MODBUS_PORTS];               //!< RX position (what byte is next)
+extern volatile uint8_t *txBufferCur[NUM_MODBUS_PORTS];               //!< TX position (what byte to send next)
+extern volatile uint16_t txBufferCount[NUM_MODBUS_PORTS];             //!< Total number of bytes to transmit
+extern volatile modbus_modes portMode[NUM_MODBUS_PORTS];              //!< Stores the mode ID for each port
 
 /*!
 * @brief Initializes modbus functionality so that we are ready for communication
@@ -124,10 +161,11 @@ typedef enum {
 * @param baudRate The baud rate to use for communication
 * @param parity The parity to use when using UART
 * @param stopBits The number of stop bits to use when using UART
+* @param tcpPort The port number to use if this is a TCP connection (default is 502)
 *
 * @return Status value indicating the result of the init
 */
-modbus_status modbus_module_init(uint8_t port, modbus_modes mode, modbus_device_types deviceType, uint8_t slaveAddress, uint32_t baudRate, modbus_parity parity, uint8_t stopBits);
+modbus_status modbus_module_init(uint8_t port, modbus_modes mode, modbus_device_types deviceType, uint8_t slaveAddress, uint32_t baudRate, modbus_parity parity, uint8_t stopBits, uint16_t tcpPort);
 
 /*!
 * @brief Changes the slave address of the unit's port
