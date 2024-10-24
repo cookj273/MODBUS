@@ -1,6 +1,5 @@
-Embedded MODBUS Master & Slave Drivers
-------------------------------------------------------------------------------------------------------
-Description:
+# Embedded MODBUS Master & Slave Drivers
+## Description
 
 This driver is for the implementation of MODBUS aimed at any processor.  It is written in C and hardware specific functions are stubbed out and rely on the user providing a port file for the implementation of this.  The driver allows opening multiple ports as either slave or master.  It implements 485 RTU, ASCII, and TCP modes.
 
@@ -10,8 +9,7 @@ As far as running the drivers, take a look at the examples.  Basically you just 
 
 As for the PORT file, you are basically setting up your part's UART and a timer or for TCP an FSM to manage the socket connection.  MODBUS RTU is a time based protocol so it is recommended that you make this an interrupt based setup but if not then you should ensure you service them often in order to indicate accurately to the driver's when a byte is received and when a timeout occurs.  Your port init function will take in a TX, RX, and Timeout callback pointer and you should call these whenever one of the 3 circumstances occur.  You will want to disable RX, TX, and the timer in the init routine because the drivers will call the enable functions that you implement when it is time to turn them on.  See the examples folder to get and idea of how to implement these : ).
 
-------------------------------------------------------------------------------------------------------
-Revision Log:
+## Revision Log
 
 Rev 1.0 - Jarrod Cook (5/2014):
 	- The first version of drivers adapted from freemodbus library.  Still need to implement TCP and ASCII drivers.
@@ -29,12 +27,9 @@ Rev 1.3 - Jarrod Cook (2/2020):
 Rev 1.4 - Jarrod Cook (4/2022)
 	- Added in TCP functionality with example
 	- Added master example to example code
-		
-------------------------------------------------------------------------------------------------------
-Todos:
-	- Implement the ability to set both they BYTE (endianness) and WORD (word swap) order [ABCD,BADC,CDAB,DCBA].
-	- Add the ability for a timeout in master mode (would need ports stub out for timer so maybe leave this to the user?)
-	- Simplify holding write callbacks by passing the bytes remaining to write holding and remove the start and verify
-	- Improve the example code to actually be a working full example for a given CPU?
 	
-------------------------------------------------------------------------------------------------------
+## Todos
+- [ ] Implement the ability to set both they BYTE (endianness) and WORD (word swap) order [ABCD,BADC,CDAB,DCBA].
+- [ ] Add the ability for a timeout in master mode (would need ports stub out for timer so maybe leave this to the user?)
+- [ ] Simplify holding write callbacks by passing the bytes remaining to write holding and remove the start and verify
+- [ ] Improve the example code to actually be a working full example for a given CPU?
