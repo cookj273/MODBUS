@@ -553,7 +553,7 @@ modbus_exceptions modbus_read_input_register_handler(uint8_t port, uint8_t *fram
         regCount |= (uint16_t)(frame[MODBUS_PDU_FUNC_READ_CNT_OFF + 1]);
 
         // Check if the number of registers to read is valid. If not return Modbus illegal data value exception.
-        if((regCount > 0) && (regCount < MODBUS_PDU_FUNC_READ_REGCNT_MAX)
+        if((regCount > 0) && (regCount <= MODBUS_PDU_FUNC_READ_REGCNT_MAX)
                 && (regAddress >= modbus_input_start_address(port)) && (regAddress + regCount <= (modbus_input_start_address(port) + modbus_number_of_inputs(port)))) {
             // Set the current PDU data pointer to the beginning.
             frameCur = &frame[MODBUS_PDU_FUNC_OFF];
@@ -681,7 +681,7 @@ modbus_exceptions modbus_read_holding_register_handler(uint8_t port, uint8_t *fr
         regCount |= (uint16_t)(frame[MODBUS_PDU_FUNC_READ_CNT_OFF + 1]);
 
         // Check if the number of registers to read is valid. If not return Modbus illegal data value exception.
-        if((regCount > 0) && (regCount < MODBUS_PDU_FUNC_READ_REGCNT_MAX)
+        if((regCount > 0) && (regCount <= MODBUS_PDU_FUNC_READ_REGCNT_MAX)
                 && (regAddress >= modbus_holding_start_address(port)) && (regAddress + regCount <= (modbus_holding_start_address(port) + modbus_number_of_holding(port)))) {
             // Set the current PDU data pointer to the beginning.
             frameCur = &frame[MODBUS_PDU_FUNC_OFF];

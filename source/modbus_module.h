@@ -7,7 +7,7 @@
 * This file is the implementation of routines to handle modbus
 * communications with external equipment.
 *
-* @copyright Copyright 2020 Matric Limited. Licensed under the MIT License. See LICENSE file in the project root for full license information.
+* @copyright Copyright 2024 Matric Limited. Licensed under the MIT License. See LICENSE file in the project root for full license information.
 */
 #ifndef MODBUS_MODULE_H_
 #define MODBUS_MODULE_H_
@@ -17,13 +17,14 @@
 
 //Version
 #define MODBUS_LIBRARY_MAJOR_VERSION    1
-#define MODBUS_LIBRARY_MINOR_VERSION    4
+#define MODBUS_LIBRARY_MINOR_VERSION    10
 
 //Defines
 #define MODBUS_FUNC_ERROR       128                                         //!< FUNCTION ERROR MASK (OR WITH ORIGINAL FUNCTION CODE TO INDICATE ERROR)
 //General frame limits
 #define MODBUS_PDU_SIZE_MIN     1                                           //!< Minimum frame PDU size just a function code
-#define MODBUS_PDU_SIZE_MAX     253                                         //!< Maximum size of a PDU.
+#define MODBUS_PDU_SIZE_MAX     254                                         //!< Maximum size of a PDU.
+#define MODBUS_TCP_PDU_SIZE_MAX 261                                         //!< Maximum size of a PDU for TCP/IP.
 #define MODBUS_PDU_FUNC_OFF     0                                           //!< Offset of function code in PDU.
 #define MODBUS_PDU_DATA_OFF     1                                           //!< Offset for response data in PDU.
 //Read Limits
@@ -108,8 +109,9 @@ typedef enum {
 */
 typedef enum {
     MODBUS_SLAVE_DEVICE=0,      //!< Slave device, respond to commands
-    MODBUS_MASTER_DEVICE=1,    //!< Master device, transmit commands and wait
+    MODBUS_MASTER_DEVICE=1      //!< Master device, transmit commands and wait
 } modbus_device_types;
+
 /*!
 * The following defines the different RTU receive states
 */

@@ -60,7 +60,7 @@ void modbus_tcp_close(uint8_t port)
 *        inFrame - Pointer to place the received data frame into
 *        inLength - Pointer to place the length of the data frame into
 * Output: MB_ERROR - Indicates whether or not a valid Modbus packet has been received over the port.
-* Description: Called when a complete modbuss packet has been received over TCP.  Checks validiting of
+* Description: Called when a complete modbus packet has been received over TCP.  Checks validation of
 *               the packet and places it into the given buffers for processing.
 ********************************************************************/
 modbus_status modbus_tcp_receive(uint8_t port, uint8_t *rcvAddress, uint8_t **inFrame, uint16_t *inLength)
@@ -128,7 +128,7 @@ modbus_status modbus_tcp_transmit(uint8_t port, uint8_t slaveAddress, const uint
         }
         tcpFrame[MB_TCP_TID + 1]++;
     }
-    if((portMode[port] == MODBUS_TCP) && ((inLength+7) < MODBUS_PDU_SIZE_MAX)) {
+    if((portMode[port] == MODBUS_TCP) && ((inLength+7) < MODBUS_TCP_PDU_SIZE_MAX)) {
         for(i=0; i < tcpLength; i++) {
             mbDataBuf[port][i] = tcpFrame[i];
         }
